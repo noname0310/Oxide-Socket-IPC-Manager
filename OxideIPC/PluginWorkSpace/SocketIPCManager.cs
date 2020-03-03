@@ -1,27 +1,26 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
-using UnityEngine;
 using Oxide.Core;
 using Oxide.Core.Configuration;
 using Oxide.Core.Plugins;
+using Oxide.Core.Libraries;
 using Oxide.Core.Libraries.Covalence;
-using Rust;
 
 namespace Oxide.Plugins
 {
-    [Info("Socket IPC Manager", "noname", "0.0.1")]
-    [Description("Manage IPC")]
+    [Info("Socket IPC Manager", "noname", "0.1.0")]
+    [Description("Manage Socket IPC IO")]
     class SocketIPCManager : CovalencePlugin
     {
         private JArray SendDataQueue;
-        private GameObject CoroutineObject;
+
+        private string FullAddress;
+        private bool Requesting;
+        private RequestMethod CurrentRequstMethod;
 
         #region Hooks
 
@@ -39,12 +38,15 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized()
         {
+            SendDataQueue = new JArray();
+            FullAddress = string.Format("http://{0}:{1}/", config.IPCAddress, config.IPCPort);
 
+            Requesting = false;
+            CurrentRequstMethod = RequestMethod.GET;
+            //timer.Every(0.1f, TryRequest);
         }
 
         #endregion
-
-        #region PluginIO
 
         #region ConfigManage
 
@@ -60,82 +62,52 @@ namespace Oxide.Plugins
 
         private class PluginConfig
         {
-            public int GuardDuration;
-            public int BetweenReadDelay;
+            public string IPCAddress;
+            public int IPCPort;
         }
 
         private PluginConfig GetDefaultConfig()
         {
             return new PluginConfig
             {
-                GuardDuration = 400,//0.4sec
-                BetweenReadDelay = 100,//0.1sec
-                // [guard add][0.4 waiting..][ReadAndWriteFile][guard remove][0.1 waiting..][guard add][0.4 waiting..]
+                IPCAddress = "127.0.0.1",
+                IPCPort = 20311
             };
         }
 
         #endregion
 
-        #region DataManage
+        #region WebRequest
 
-        DynamicConfigFile ServerWritingDataFile;
-        DynamicConfigFile ServerWriteEndDataFile;
-
-        private void InitData()
+        private void TryRequest()
         {
-            ServerWritingDataFile = Interface.Oxide.DataFileSystem.GetDatafile("IPCManager/ServerWriting.json");
-            ServerWriteEndDataFile = Interface.Oxide.DataFileSystem.GetDatafile("IPCManager/ServerWriteEnd.json");
-        }
+            if (Requesting == true)
+                return;
 
-        private void CreateIPCGuard()
-        {
-            ServerWritingDataFile.Save();
-        }
-
-        private void CreateIPCEnd()
-        {
-            ServerWriteEndDataFile.Save();
-        }
-
-        #endregion
-
-        #endregion
-
-        #region Coroutine
-
-        private void LoadCoroutineObject()
-        {
-            CoroutineObject = new GameObject();
-
-        }
-
-        private void UnloadCoroutineObject()
-        {
-
-        }
-
-        public class IPCCoroutineObject : MonoBehaviour
-        {
-            IEnumerator Start()
+            if (CurrentRequstMethod == RequestMethod.GET)
             {
-                StartCoroutine("DoSomething", 2.0F);
-                yield return new WaitForSeconds(1);
-                StopCoroutine("DoSomething");
+                webrequest.Enqueue(FullAddress, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
+                CurrentRequstMethod = RequestMethod.POST;
+            }
+            else if (CurrentRequstMethod == RequestMethod.POST)
+            {
+                webrequest.Enqueue(FullAddress, SendDataQueue.ToString(), (code, response) => GetCallback(code, response), this, RequestMethod.POST);
+                CurrentRequstMethod = RequestMethod.GET;
+            }
+            Requesting = true;
+        }
+
+        private void GetCallback(int code, string response)
+        {
+            if (response == null || code != 200)
+            {
+                Puts($"Error: {code} - Couldn't get an answer");
+                Requesting = false;
+                return;
             }
 
-            IEnumerator DoSomething(float someParameter)
-            {
-                while (true)
-                {
-                    print("DoSomething Loop");
-                    yield return null;
-                }
-            }
-        }
-
-        private IEnumerator IPCRoutine()
-        {
-
+            Puts($"answered: {response}");
+            Requesting = false;
         }
 
         #endregion
