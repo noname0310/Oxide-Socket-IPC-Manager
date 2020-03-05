@@ -128,9 +128,6 @@
     <Reference Include="NewAssembly">
       <HintPath>..\..\..\Managed\NewAssembly.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\..\..\Managed\Newtonsoft.Json.dll</HintPath>
-    </Reference>
     <Reference Include="Novell.Directory.Ldap">
       <HintPath>..\..\..\Managed\Novell.Directory.Ldap.dll</HintPath>
     </Reference>

@@ -1,14 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 using Oxide.Core;
-using Oxide.Core.Configuration;
-using Oxide.Core.Plugins;
 using Oxide.Core.Libraries;
-using Oxide.Core.Libraries.Covalence;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
@@ -19,6 +12,7 @@ namespace Oxide.Plugins
         private JArray SendDataQueue;
 
         private string FullAddress;
+        private string GetRequest;
         private bool Requesting;
         private RequestMethod CurrentRequstMethod;
 
@@ -40,10 +34,11 @@ namespace Oxide.Plugins
         {
             SendDataQueue = new JArray();
             FullAddress = string.Format("http://{0}:{1}/", config.IPCAddress, config.IPCPort);
+            GetRequest = string.Format("{0}{1}", FullAddress, "json");
 
             Requesting = false;
             CurrentRequstMethod = RequestMethod.GET;
-            //timer.Every(0.1f, TryRequest);
+            timer.Every(0.1f, TryRequest);
         }
 
         #endregion
@@ -86,13 +81,21 @@ namespace Oxide.Plugins
 
             if (CurrentRequstMethod == RequestMethod.GET)
             {
-                webrequest.Enqueue(FullAddress, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
+                webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
                 CurrentRequstMethod = RequestMethod.POST;
             }
             else if (CurrentRequstMethod == RequestMethod.POST)
             {
-                webrequest.Enqueue(FullAddress, SendDataQueue.ToString(), (code, response) => GetCallback(code, response), this, RequestMethod.POST);
-                CurrentRequstMethod = RequestMethod.GET;
+                if (SendDataQueue.Count == 0)
+                {
+                    webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
+                }
+                else
+                {
+                    webrequest.Enqueue(FullAddress, SendDataQueue.ToString(), (code, response) => GetCallback(code, response), this, RequestMethod.POST);
+                    SendDataQueue.Clear();
+                    CurrentRequstMethod = RequestMethod.GET;
+                }
             }
             Requesting = true;
         }
@@ -101,12 +104,13 @@ namespace Oxide.Plugins
         {
             if (response == null || code != 200)
             {
-                Puts($"Error: {code} - Couldn't get an answer");
+                Puts($"Error: {code} - Couldn't connect from Discord Linker");
                 Requesting = false;
                 return;
             }
 
-            Puts($"answered: {response}");
+            if (CurrentRequstMethod == RequestMethod.POST)//GET
+                Interface.CallHook("OnIPCReceivedData", JArray.Parse(response));
             Requesting = false;
         }
 
@@ -114,13 +118,10 @@ namespace Oxide.Plugins
 
         #region Command/API
 
-
-
-        #endregion
-
-        #region Helper
-
-
+        private void API_IPCEnqueue(JToken jToken)
+        {
+            SendDataQueue.Add(jToken);
+        }
 
         #endregion
     }
