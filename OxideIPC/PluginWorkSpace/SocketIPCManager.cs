@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using Oxide.Core;
 using Oxide.Core.Libraries;
-using UnityEngine;
 
 namespace Oxide.Plugins
 {
@@ -81,26 +80,25 @@ namespace Oxide.Plugins
 
             if (CurrentRequstMethod == RequestMethod.GET)
             {
-                webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
+                webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(RequestMethod.GET, 0, code, response), this, RequestMethod.GET);
                 CurrentRequstMethod = RequestMethod.POST;
             }
             else if (CurrentRequstMethod == RequestMethod.POST)
             {
                 if (SendDataQueue.Count == 0)
                 {
-                    webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(code, response), this, RequestMethod.GET);
+                    webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(RequestMethod.GET, 0, code, response), this, RequestMethod.GET);
                 }
                 else
                 {
-                    webrequest.Enqueue(FullAddress, SendDataQueue.ToString(), (code, response) => GetCallback(code, response), this, RequestMethod.POST);
-                    SendDataQueue.Clear();
+                    webrequest.Enqueue(FullAddress, SendDataQueue.ToString(), (code, response) => GetCallback(RequestMethod.POST, SendDataQueue.Count, code, response), this, RequestMethod.POST);
                     CurrentRequstMethod = RequestMethod.GET;
                 }
             }
             Requesting = true;
         }
 
-        private void GetCallback(int code, string response)
+        private void GetCallback(RequestMethod requestMethod, int dataCount, int code, string response)
         {
             if (response == null || code != 200)
             {
@@ -109,8 +107,13 @@ namespace Oxide.Plugins
                 return;
             }
 
-            if (CurrentRequstMethod == RequestMethod.POST)//GET
+            if (requestMethod == RequestMethod.GET)
                 Interface.CallHook("OnIPCReceivedData", JArray.Parse(response));
+            else if (requestMethod == RequestMethod.POST)
+            {
+                for (int i = 0; i < dataCount; i++)
+                    SendDataQueue.RemoveAt(0);
+            }
             Requesting = false;
         }
 
