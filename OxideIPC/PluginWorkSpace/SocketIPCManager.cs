@@ -4,7 +4,7 @@ using Oxide.Core.Libraries;
 
 namespace Oxide.Plugins
 {
-    [Info("Socket IPC Manager", "noname", "0.1.0")]
+    [Info("Socket IPC Manager", "noname", "0.2.0")]
     [Description("Manage Socket IPC IO")]
     class SocketIPCManager : CovalencePlugin
     {
@@ -14,6 +14,7 @@ namespace Oxide.Plugins
         private string GetRequest;
         private bool Requesting;
         private RequestMethod CurrentRequstMethod;
+        private Timer ErrCatchTimer;
 
         #region Hooks
 
@@ -37,6 +38,7 @@ namespace Oxide.Plugins
 
             Requesting = false;
             CurrentRequstMethod = RequestMethod.GET;
+            ErrCatchTimer = timer.Every(5f, () => { Requesting = false; });
             timer.Every(0.1f, TryRequest);
         }
 
@@ -77,7 +79,6 @@ namespace Oxide.Plugins
         {
             if (Requesting == true)
                 return;
-
             if (CurrentRequstMethod == RequestMethod.GET)
             {
                 webrequest.Enqueue(GetRequest, null, (code, response) => GetCallback(RequestMethod.GET, code, response), this, RequestMethod.GET);
@@ -104,14 +105,16 @@ namespace Oxide.Plugins
         {
             if (response == null || code != 200)
             {
-                Puts($"Error: {code} - Couldn't connect from Discord Linker");
+                ErrCatchTimer.Reset();
                 Requesting = false;
+                Puts($"Error: {code} - Couldn't connect from Discord Linker");
                 return;
             }
 
+            ErrCatchTimer.Reset();
+            Requesting = false;
             if (requestMethod == RequestMethod.GET)
                 Interface.CallHook("OnIPCReceivedData", JArray.Parse(response));
-            Requesting = false;
         }
 
         #endregion
